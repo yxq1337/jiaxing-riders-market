@@ -1,0 +1,21 @@
+{
+  "name": "jiaxing-rider-market-frontend",
+  "version": "1.0.0",
+  "description": "嘉兴骑手集市前端",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "vue-router": "^4.2.5",
+    "vant": "^4.8.0",
+    "axios": "^1.6.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.5.0",
+    "vite": "^5.0.0"
+  }
+}
