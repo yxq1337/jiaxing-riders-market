@@ -1,6 +1,6 @@
 const APP_ID = 'f33a06a03b05f0795367d32767f21c63'
 const REST_KEY = 'e309b64d6176f40dea125aa38bf8a2e4'
-const BASE_URL = 'https://api2.bmob.cn/1'
+const BASE_URL = 'https://api.bmobapp.cn/1'
 
 const request = async (url, options = {}) => {
   const headers = {
