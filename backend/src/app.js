@@ -16,12 +16,14 @@ const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const messageRoutes = require('./routes/messages');
 const reviewRoutes = require('./routes/reviews');
+const postRoutes = require('./routes/posts');
 
 app.use('/api/users', userRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/posts', postRoutes);
 
 // 测试路由
 app.get('/api/health', (req, res) => {

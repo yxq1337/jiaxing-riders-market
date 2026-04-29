@@ -46,6 +46,7 @@
 
     <!-- 帖子列表 -->
     <div class="post-list">
+      <div v-if="loading" class="loading">加载中...</div>
       <div v-for="post in posts" :key="post.id" class="post-card" @click="viewPost(post)">
         <div class="post-header">
           <div class="author-avatar">
@@ -57,7 +58,7 @@
               <span v-if="post.level" class="author-level">{{ post.level }}</span>
             </div>
             <div class="post-time">
-              <span class="location">📍 {{ post.location }}</span>
+              <span class="location">📍 {{ post.location || '嘉兴' }}</span>
               <span>·</span>
               <span>{{ post.time }}</span>
             </div>
@@ -92,7 +93,7 @@
           </div>
           <div class="action-item">
             <span>⭐</span>
-            <span>{{ post.stars }}</span>
+            <span>{{ post.stars || 0 }}</span>
           </div>
           <div class="action-item share">
             <span>📤</span>
@@ -111,12 +112,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { postApi } from '../api'
 
 const router = useRouter()
 const activeSection = ref(0)
+const posts = ref([])
+const loading = ref(false)
 
 const sections = [
   { name: '首页', icon: '🏠', count: '' },
@@ -130,88 +134,64 @@ const sections = [
 const hotTopics = [
   { title: '今天中环南路大堵车，有人知道怎么回事吗？', replies: 45, views: 1230 },
   { title: '推荐几个晚上跑单好停车的地方', replies: 28, views: 890 },
-  { title: '明天有雨，大家注意带雨衣！', replies: 67, views: 2100 },
+  { title: '明天有雨，大家记得带雨衣！', replies: 67, views: 2100 },
   { title: '万达那家电动车维修店太黑了！', replies: 34, views: 560 },
 ]
 
-const posts = ref([
-  {
-    id: 1,
-    author: '老骑友王哥',
-    level: 'Lv.12',
-    location: '经开区',
-    time: '刚刚',
-    title: '🚨 中环南路与越秀路交叉口严重堵车！建议绕行',
-    content: '刚才路过，三车追尾，整个路口堵死了，大家建议从文昌路或者由拳路绕行，别在这里浪费时间！',
-    images: [],
-    replies: 89,
-    likes: 234,
-    stars: 67
-  },
-  {
-    id: 2,
-    author: '南湖车神',
-    level: 'Lv.8',
-    location: '南湖区',
-    time: '10分钟前',
-    title: '实测：嘉善到嘉兴市区这条新路线，比原来快15分钟！',
-    content: '今天试了一下从嘉善走那条新修的路，比往常节省了至少15分钟，全程没有红绿灯，跑起来特别爽！',
-    images: ['https://picsum.photos/400/300?random=1', 'https://picsum.photos/400/300?random=2'],
-    replies: 23,
-    likes: 156,
-    stars: 34
-  },
-  {
-    id: 3,
-    author: '风雨无阻',
-    level: 'Lv.10',
-    location: '秀洲区',
-    time: '25分钟前',
-    title: '⛈️ 今晚有暴雨！大家记得带雨衣，这几个路段别去',
-    content: '天气预报说今晚有大到暴雨，提醒几个积水重灾区：中山路下穿、火车站隧道、昌盛路大桥下，大家尽量避开。',
-    images: ['https://picsum.photos/400/250?random=4'],
-    replies: 56,
-    likes: 312,
-    stars: 89
-  },
-  {
-    id: 4,
-    author: '跑单小王子',
-    level: 'Lv.6',
-    location: '南湖区',
-    time: '40分钟前',
-    title: '禾兴路今天全段施工，从早到晚都堵，别来了',
-    content: '今天跑禾兴路的兄弟们注意了，全段修路，半幅通行，我堵了20分钟才出来，建议直接绕路。',
-    images: [],
-    replies: 34,
-    likes: 128,
-    stars: 22
-  },
-  {
-    id: 5,
-    author: '桐乡阿杰',
-    level: 'Lv.7',
-    location: '桐乡',
-    time: '1小时前',
-    title: '桐乡乌镇大道新增测速摄像头，限速50！',
-    content: '昨天被拍了，扣6分罚200...乌镇大道和环河路交叉口新增的，大家注意减速，太坑了！',
-    images: ['https://picsum.photos/400/300?random=8'],
-    replies: 67,
-    likes: 245,
-    stars: 51
-  },
-])
+const formatTime = (dateStr) => {
+  const diff = Date.now() - new Date(dateStr).getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes}分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}小时前`
+  return `${Math.floor(hours / 24)}天前`
+}
+
+const loadPosts = async () => {
+  loading.value = true
+  try {
+    const sectionName = activeSection.value === 0 ? null : sections[activeSection.value].name
+    const res = await postApi.getList({ section: sectionName })
+    posts.value = res.data.map(post => ({
+      ...post,
+      id: post.objectId,
+      author: post.authorName || '匿名用户',
+      level: '',
+      time: formatTime(post.createdAt),
+      replies: post.replies_count || 0,
+      images: post.images ? post.images.split(',').filter(i => i) : []
+    }))
+  } catch (e) {
+    console.error('加载帖子失败', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(activeSection, () => {
+  loadPosts()
+})
+
+onMounted(() => {
+  loadPosts()
+})
 
 const viewTopic = (t) => {
   showToast('查看话题：' + t.title)
 }
 
 const viewPost = (p) => {
-  showToast('查看帖子：' + p.title.slice(0, 10) + '...')
+  router.push(`/post/${p.id}`)
 }
 
 const createPost = () => {
-  showToast('打开发帖页面')
+  const token = localStorage.getItem('token')
+  if (!token) {
+    router.push('/login')
+    return
+  }
+  router.push('/create-post')
 }
 </script>
 
@@ -220,6 +200,13 @@ const createPost = () => {
   min-height: 100vh;
   background: var(--bg-gray);
   padding-bottom: 90px;
+}
+
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-light);
+  font-weight: 700;
 }
 
 /* 头部搜索 */

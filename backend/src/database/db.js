@@ -16,7 +16,9 @@ const db = new Low(adapter, {
   orders: [],
   messages: [],
   reviews: [],
-  favorites: []
+  favorites: [],
+  posts: [],
+  postReplies: []
 });
 
 db.read();

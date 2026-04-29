@@ -8,6 +8,8 @@ import Profile from '../views/Profile.vue'
 import MyProducts from '../views/MyProducts.vue'
 import Chat from '../views/Chat.vue'
 import Forum from '../views/Forum.vue'
+import PostDetail from '../views/PostDetail.vue'
+import CreatePost from '../views/CreatePost.vue'
 
 const routes = [
   { path: '/', component: Forum },
@@ -15,6 +17,8 @@ const routes = [
   { path: '/market', component: Home },
   { path: '/publish', component: Publish, meta: { requiresAuth: true } },
   { path: '/product/:id', component: ProductDetail },
+  { path: '/post/:id', component: PostDetail },
+  { path: '/create-post', component: CreatePost, meta: { requiresAuth: true } },
   { path: '/messages', component: Messages, meta: { requiresAuth: true } },
   { path: '/chat/:userId', component: Chat, meta: { requiresAuth: true } },
   { path: '/profile', component: Profile, meta: { requiresAuth: true } },
