@@ -42,22 +42,17 @@ const formatResult = (res) => {
 // 用户API
 export const userApi = {
   register: async (data) => {
-    const { phone, password, nickname } = data
-    return request('/users', {
+    return request('/functions/userRegister', {
       method: 'POST',
-      body: JSON.stringify({
-        username: phone,
-        password: password,
-        phone: phone,
-        nickname: nickname || phone,
-        credit_score: 100
-      })
-    })
+      body: JSON.stringify(data)
+    }).then(res => res.result)
   },
 
   login: async (data) => {
-    const { phone, password } = data
-    return request(`/login?username=${encodeURIComponent(phone)}&password=${encodeURIComponent(password)}`)
+    return request('/functions/userLogin', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }).then(res => res.result)
   },
 
   getProfile: async () => {
