@@ -1,15 +1,34 @@
-import Bmob from 'hydrogen-js-sdk'
+const APP_ID = 'f33a06a03b05f0795367d32767f21c63'
+const REST_KEY = 'e309b64d6176f40dea125aa38bf8a2e4'
+const BASE_URL = 'https://api2.bmob.cn/1'
 
-// 初始化 Bmob
-Bmob.initialize(
-  'f33a06a03b05f0795367d32767f21c63',    // Application ID
-  'e309b64d6176f40dea125aa38bf8a2e4'     // REST API Key
-)
+const request = async (url, options = {}) => {
+  const headers = {
+    'X-Bmob-Application-Id': APP_ID,
+    'X-Bmob-REST-API-Key': REST_KEY,
+    'Content-Type': 'application/json',
+    ...options.headers
+  }
 
-// 工具函数：统一 Bmob 查询结果格式
+  const token = localStorage.getItem('token')
+  if (token) {
+    headers['X-Bmob-Session-Token'] = token
+  }
+
+  const res = await fetch(BASE_URL + url, {
+    ...options,
+    headers
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.error || data.msg || '请求失败')
+  }
+  return data
+}
+
 const formatResult = (res) => {
   if (res && res.results) return res.results
-  if (res && res.data) return res.data
   return res
 }
 
@@ -17,25 +36,27 @@ const formatResult = (res) => {
 export const userApi = {
   register: async (data) => {
     const { phone, password, nickname } = data
-    const params = {
-      username: phone,
-      password: password,
-      phone: phone,
-      nickname: nickname || phone,
-      credit_score: 100
-    }
-    return Bmob.User.register(params)
+    return request('/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        username: phone,
+        password: password,
+        phone: phone,
+        nickname: nickname || phone,
+        credit_score: 100
+      })
+    })
   },
 
   login: async (data) => {
     const { phone, password } = data
-    return Bmob.User.login(phone, password)
+    return request(`/login?username=${encodeURIComponent(phone)}&password=${encodeURIComponent(password)}`)
   },
 
   getProfile: async () => {
-    const current = Bmob.User.current()
-    if (!current) throw new Error('未登录')
-    return Bmob.User.current()
+    const userStr = localStorage.getItem('user')
+    if (!userStr) throw new Error('未登录')
+    return JSON.parse(userStr)
   }
 }
 
@@ -43,29 +64,17 @@ export const userApi = {
 export const postApi = {
   getList: async (params = {}) => {
     const { section, limit = 20, page = 1 } = params
-    const query = Bmob.Query('Posts')
-    query.order('-createdAt')
-    query.limit(limit)
-    query.skip((page - 1) * limit)
-
+    let url = `/classes/Posts?limit=${limit}&skip=${(page - 1) * limit}&order=-createdAt`
     if (section && section !== '首页') {
-      query.equalTo('section', '==', section)
+      url += `&where=${encodeURIComponent(JSON.stringify({ section }))}`
     }
-
-    const res = await query.find()
+    const res = await request(url)
     return { data: formatResult(res) }
   },
 
   getDetail: async (id) => {
-    const query = Bmob.Query('Posts')
-    const post = await query.get(id)
-
-    // 获取回复
-    const replyQuery = Bmob.Query('PostReplies')
-    replyQuery.equalTo('postId', '==', id)
-    replyQuery.order('-createdAt')
-    const replies = await replyQuery.find()
-
+    const post = await request(`/classes/Posts/${id}`)
+    const replies = await request(`/classes/PostReplies?where=${encodeURIComponent(JSON.stringify({ postId: id }))}&order=-createdAt`)
     return {
       data: {
         post: formatResult(post),
@@ -75,48 +84,52 @@ export const postApi = {
   },
 
   create: async (data) => {
-    const query = Bmob.Query('Posts')
-    const current = Bmob.User.current()
-
-    query.set('title', data.title)
-    query.set('content', data.content)
-    query.set('section', data.section || '闲聊灌水')
-    query.set('location', data.location || '')
-    query.set('images', data.images || '')
-    query.set('userId', current?.objectId || '')
-    query.set('authorName', current?.nickname || current?.username || '匿名')
-    query.set('likes', 0)
-    query.set('replies_count', 0)
-
-    const res = await query.save()
-    return { data: res }
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    return request('/classes/Posts', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: data.title,
+        content: data.content,
+        section: data.section || '闲聊灌水',
+        location: data.location || '',
+        images: data.images || '',
+        userId: current?.objectId || '',
+        authorName: current?.nickname || current?.username || '匿名',
+        likes: 0,
+        replies_count: 0
+      })
+    })
   },
 
   like: async (id) => {
-    const query = Bmob.Query('Posts')
-    query.set('objectId', id)
-    query.increment('likes', 1)
-    const res = await query.save()
+    const res = await request(`/classes/Posts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        likes: { __op: 'Increment', amount: 1 }
+      })
+    })
     return { data: res, success: true }
   },
 
   reply: async (id, data) => {
-    const query = Bmob.Query('PostReplies')
-    const current = Bmob.User.current()
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    const res = await request('/classes/PostReplies', {
+      method: 'POST',
+      body: JSON.stringify({
+        postId: id,
+        content: data.content,
+        userId: current?.objectId || '',
+        authorName: current?.nickname || current?.username || '匿名',
+        likes: 0
+      })
+    })
 
-    query.set('postId', id)
-    query.set('content', data.content)
-    query.set('userId', current?.objectId || '')
-    query.set('authorName', current?.nickname || current?.username || '匿名')
-    query.set('likes', 0)
-
-    const res = await query.save()
-
-    // 更新帖子回复数
-    const postQuery = Bmob.Query('Posts')
-    postQuery.set('objectId', id)
-    postQuery.increment('replies_count', 1)
-    await postQuery.save()
+    await request(`/classes/Posts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        replies_count: { __op: 'Increment', amount: 1 }
+      })
+    })
 
     return { data: res }
   }
@@ -126,42 +139,32 @@ export const postApi = {
 export const productApi = {
   getList: async (params = {}) => {
     const { limit = 20, page = 1 } = params
-    const query = Bmob.Query('Products')
-    query.order('-createdAt')
-    query.limit(limit)
-    query.skip((page - 1) * limit)
-    const res = await query.find()
+    const res = await request(`/classes/Products?limit=${limit}&skip=${(page - 1) * limit}&order=-createdAt`)
     return { data: formatResult(res) }
   },
 
   getDetail: async (id) => {
-    const query = Bmob.Query('Products')
-    const res = await query.get(id)
+    const res = await request(`/classes/Products/${id}`)
     return { data: res }
   },
 
   create: async (data) => {
-    const query = Bmob.Query('Products')
-    const current = Bmob.User.current()
-
-    Object.keys(data).forEach(key => {
-      query.set(key, data[key])
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    const res = await request('/classes/Products', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        userId: current?.objectId || '',
+        views: 0
+      })
     })
-    query.set('userId', current?.objectId || '')
-    query.set('views', 0)
-
-    const res = await query.save()
     return { data: res }
   },
 
   getMyList: async () => {
-    const current = Bmob.User.current()
-    if (!current) return { data: [] }
-
-    const query = Bmob.Query('Products')
-    query.equalTo('userId', '==', current.objectId)
-    query.order('-createdAt')
-    const res = await query.find()
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    if (!current.objectId) return { data: [] }
+    const res = await request(`/classes/Products?where=${encodeURIComponent(JSON.stringify({ userId: current.objectId }))}&order=-createdAt`)
     return { data: formatResult(res) }
   }
 }
@@ -169,29 +172,29 @@ export const productApi = {
 // 订单API (简化版)
 export const orderApi = {
   create: async (data) => {
-    const query = Bmob.Query('Orders')
-    const current = Bmob.User.current()
-    query.set('userId', current?.objectId || '')
-    Object.keys(data).forEach(key => query.set(key, data[key]))
-    const res = await query.save()
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    const res = await request('/classes/Orders', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        userId: current?.objectId || ''
+      })
+    })
     return { data: res }
   },
 
   getMyList: async () => {
-    const current = Bmob.User.current()
-    if (!current) return { data: [] }
-    const query = Bmob.Query('Orders')
-    query.equalTo('userId', '==', current.objectId)
-    query.order('-createdAt')
-    const res = await query.find()
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    if (!current.objectId) return { data: [] }
+    const res = await request(`/classes/Orders?where=${encodeURIComponent(JSON.stringify({ userId: current.objectId }))}&order=-createdAt`)
     return { data: formatResult(res) }
   },
 
   updateStatus: async (id, status) => {
-    const query = Bmob.Query('Orders')
-    query.set('objectId', id)
-    query.set('status', status)
-    const res = await query.save()
+    const res = await request(`/classes/Orders/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ status })
+    })
     return { data: res }
   }
 }
@@ -199,45 +202,36 @@ export const orderApi = {
 // 消息API
 export const messageApi = {
   getConversations: async () => {
-    const current = Bmob.User.current()
-    if (!current) return { data: [] }
-
-    const query = Bmob.Query('Messages')
-    query.equalTo('toUserId', '==', current.objectId)
-    query.group('fromUserId')
-    query.order('-createdAt')
-    const res = await query.find()
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    if (!current.objectId) return { data: [] }
+    const res = await request(`/classes/Messages?where=${encodeURIComponent(JSON.stringify({ toUserId: current.objectId }))}&order=-createdAt`)
     return { data: formatResult(res) }
   },
 
   getConversation: async (userId) => {
-    const current = Bmob.User.current()
-    if (!current) return { data: [] }
-
-    const query = Bmob.Query('Messages')
-    query.or(
-      query.and(
-        query.equalTo('fromUserId', '==', current.objectId),
-        query.equalTo('toUserId', '==', userId)
-      ),
-      query.and(
-        query.equalTo('fromUserId', '==', userId),
-        query.equalTo('toUserId', '==', current.objectId)
-      )
-    )
-    query.order('createdAt')
-    const res = await query.find()
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    if (!current.objectId) return { data: [] }
+    const where = {
+      '$or': [
+        { fromUserId: current.objectId, toUserId: userId },
+        { fromUserId: userId, toUserId: current.objectId }
+      ]
+    }
+    const res = await request(`/classes/Messages?where=${encodeURIComponent(JSON.stringify(where))}&order=createdAt`)
     return { data: formatResult(res) }
   },
 
   send: async (data) => {
-    const query = Bmob.Query('Messages')
-    const current = Bmob.User.current()
-    query.set('fromUserId', current?.objectId || '')
-    query.set('fromUserName', current?.nickname || current?.username)
-    query.set('toUserId', data.toUserId)
-    query.set('content', data.content)
-    const res = await query.save()
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    const res = await request('/classes/Messages', {
+      method: 'POST',
+      body: JSON.stringify({
+        fromUserId: current?.objectId || '',
+        fromUserName: current?.nickname || current?.username || '',
+        toUserId: data.toUserId,
+        content: data.content
+      })
+    })
     return { data: res }
   }
 }
@@ -245,22 +239,22 @@ export const messageApi = {
 // 评价API
 export const reviewApi = {
   create: async (data) => {
-    const query = Bmob.Query('Reviews')
-    const current = Bmob.User.current()
-    query.set('userId', current?.objectId || '')
-    query.set('userName', current?.nickname || current?.username)
-    Object.keys(data).forEach(key => query.set(key, data[key]))
-    const res = await query.save()
+    const current = JSON.parse(localStorage.getItem('user') || '{}')
+    const res = await request('/classes/Reviews', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...data,
+        userId: current?.objectId || '',
+        userName: current?.nickname || current?.username || ''
+      })
+    })
     return { data: res }
   },
 
   getUserReviews: async (userId) => {
-    const query = Bmob.Query('Reviews')
-    query.equalTo('userId', '==', userId)
-    query.order('-createdAt')
-    const res = await query.find()
+    const res = await request(`/classes/Reviews?where=${encodeURIComponent(JSON.stringify({ userId }))}&order=-createdAt`)
     return { data: formatResult(res) }
   }
 }
 
-export default Bmob
+export default null
