@@ -88,15 +88,14 @@ const onSubmit = async () => {
 
   try {
     const api = isLogin.value ? userApi.login : userApi.register
-    const user = await api({
+    const result = await api({
       phone: form.phone,
       password: form.password,
       nickname: form.nickname
     })
 
-    // Bmob 用户登录后自动保存在 localStorage
-    localStorage.setItem('token', user.sessionToken)
-    localStorage.setItem('user', JSON.stringify(user))
+    localStorage.setItem('token', result.token)
+    localStorage.setItem('user', JSON.stringify(result.user || result))
 
     showToast(isLogin.value ? '登录成功 🎉' : '注册成功 🎉')
 
