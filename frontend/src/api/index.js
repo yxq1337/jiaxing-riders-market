@@ -1,64 +1,64 @@
-const APP_ID = 'f33a06a03b05f0795367d32767f21c63'
-const REST_KEY = 'e309b64d6176f40dea125aa38bf8a2e4'
-const BASE_URL = 'https://api2.bmob.cn/1'
+import axios from 'axios'
 
-const request = async (url, options = {}) => {
-  const headers = {
-    'X-Bmob-Application-Id': APP_ID,
-    'X-Bmob-REST-API-Key': REST_KEY,
-    'Content-Type': 'application/json',
-    ...options.headers
+const request = axios.create({
+  baseURL: '/api-bmob',
+  timeout: 15000,
+  headers: {
+    'X-Bmob-Application-Id': 'f33a06a03b05f0795367d32767f21c63',
+    'X-Bmob-REST-API-Key': 'e309b64d6176f40dea125aa38bf8a2e4',
+    'Content-Type': 'application/json'
   }
+})
 
-  const token = localStorage.getItem('token')
-  if (token) {
-    headers['X-Bmob-Session-Token'] = token
-  }
-
-  try {
-    console.log('请求:', BASE_URL + url)
-    const res = await fetch(BASE_URL + url, {
-      mode: 'cors',
-      ...options,
-      headers
-    })
-    const data = await res.json()
-    console.log('响应:', data)
-    if (!res.ok) {
-      throw new Error(data.error || data.msg || '请求失败')
+// 请求拦截器
+request.interceptors.request.use(
+  config => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers['X-Bmob-Session-Token'] = token
     }
-    return data
-  } catch (e) {
-    console.error('请求错误:', e)
-    throw e
-  }
-}
+    return config
+  },
+  error => Promise.reject(error)
+)
 
-const formatResult = (res) => {
-  if (res && res.results) return res.results
-  return res
-}
+// 响应拦截器
+request.interceptors.response.use(
+  response => response.data,
+  error => {
+    console.error('API错误:', error)
+    return Promise.reject(error)
+  }
+)
 
 // 用户API
 export const userApi = {
-  register: async (data) => {
-    return request('/functions/userRegister', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }).then(res => res.result)
+  register: (data) => {
+    const params = {
+      username: data.phone,
+      password: data.password,
+      phone: data.phone,
+      nickname: data.nickname || data.phone,
+      credit_score: 100
+    }
+    return request.post('/users', params)
   },
 
   login: async (data) => {
-    return request('/functions/userLogin', {
-      method: 'POST',
-      body: JSON.stringify(data)
-    }).then(res => res.result)
+    const result = await request.get('/login', {
+      params: {
+        username: data.phone,
+        password: data.password
+      }
+    })
+    localStorage.setItem('token', result.sessionToken)
+    return result
   },
 
-  getProfile: async () => {
+  getProfile: () => {
     const userStr = localStorage.getItem('user')
-    if (!userStr) throw new Error('未登录')
-    return JSON.parse(userStr)
+    if (!userStr) return Promise.reject(new Error('未登录'))
+    return Promise.resolve(JSON.parse(userStr))
   }
 }
 
@@ -66,197 +66,195 @@ export const userApi = {
 export const postApi = {
   getList: async (params = {}) => {
     const { section, limit = 20, page = 1 } = params
-    let url = `/classes/Posts?limit=${limit}&skip=${(page - 1) * limit}&order=-createdAt`
+    let where = {}
     if (section && section !== '首页') {
-      url += `&where=${encodeURIComponent(JSON.stringify({ section }))}`
+      where = { section }
     }
-    const res = await request(url)
-    return { data: formatResult(res) }
+    const result = await request.get('/classes/Posts', {
+      params: {
+        limit,
+        skip: (page - 1) * limit,
+        order: '-createdAt',
+        where: Object.keys(where).length > 0 ? JSON.stringify(where) : undefined
+      }
+    })
+    return result.results || []
   },
 
   getDetail: async (id) => {
-    const post = await request(`/classes/Posts/${id}`)
-    const replies = await request(`/classes/PostReplies?where=${encodeURIComponent(JSON.stringify({ postId: id }))}&order=-createdAt`)
-    return {
-      data: {
-        post: formatResult(post),
-        replies: formatResult(replies)
+    const post = await request.get(`/classes/Posts/${id}`)
+    const replies = await request.get('/classes/PostReplies', {
+      params: {
+        where: JSON.stringify({ postId: id }),
+        order: '-createdAt'
       }
+    })
+    return {
+      post,
+      replies: replies.results || []
     }
   },
 
   create: async (data) => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    return request('/classes/Posts', {
-      method: 'POST',
-      body: JSON.stringify({
-        title: data.title,
-        content: data.content,
-        section: data.section || '闲聊灌水',
-        location: data.location || '',
-        images: data.images || '',
-        userId: current?.objectId || '',
-        authorName: current?.nickname || current?.username || '匿名',
-        likes: 0,
-        replies_count: 0
-      })
+    return request.post('/classes/Posts', {
+      title: data.title,
+      content: data.content,
+      section: data.section || '闲聊灌水',
+      location: data.location || '',
+      images: data.images || '',
+      userId: current?.objectId || '',
+      authorName: current?.nickname || current?.username || '匿名',
+      likes: 0,
+      replies_count: 0
     })
   },
 
   like: async (id) => {
-    const res = await request(`/classes/Posts/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        likes: { __op: 'Increment', amount: 1 }
-      })
+    return request.put(`/classes/Posts/${id}`, {
+      likes: { '__op': 'Increment', 'amount': 1 }
     })
-    return { data: res, success: true }
   },
 
   reply: async (id, data) => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    const res = await request('/classes/PostReplies', {
-      method: 'POST',
-      body: JSON.stringify({
-        postId: id,
-        content: data.content,
-        userId: current?.objectId || '',
-        authorName: current?.nickname || current?.username || '匿名',
-        likes: 0
-      })
+    const result = await request.post('/classes/PostReplies', {
+      postId: id,
+      content: data.content,
+      userId: current?.objectId || '',
+      authorName: current?.nickname || current?.username || '匿名',
+      likes: 0
     })
 
-    await request(`/classes/Posts/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        replies_count: { __op: 'Increment', amount: 1 }
-      })
+    await request.put(`/classes/Posts/${id}`, {
+      replies_count: { '__op': 'Increment', 'amount': 1 }
     })
 
-    return { data: res }
+    return result
   }
 }
 
 // 商品API
 export const productApi = {
-  getList: async (params = {}) => {
+  getList: (params = {}) => {
     const { limit = 20, page = 1 } = params
-    const res = await request(`/classes/Products?limit=${limit}&skip=${(page - 1) * limit}&order=-createdAt`)
-    return { data: formatResult(res) }
+    return request.get('/classes/Products', {
+      params: {
+        limit,
+        skip: (page - 1) * limit,
+        order: '-createdAt'
+      }
+    }).then(res => res.results || [])
   },
 
-  getDetail: async (id) => {
-    const res = await request(`/classes/Products/${id}`)
-    return { data: res }
-  },
+  getDetail: (id) => request.get(`/classes/Products/${id}`),
 
-  create: async (data) => {
+  create: (data) => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    const res = await request('/classes/Products', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...data,
-        userId: current?.objectId || '',
-        views: 0
-      })
+    return request.post('/classes/Products', {
+      ...data,
+      userId: current?.objectId || '',
+      views: 0,
+      status: 'active'
     })
-    return { data: res }
   },
 
-  getMyList: async () => {
+  getMyList: () => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    if (!current.objectId) return { data: [] }
-    const res = await request(`/classes/Products?where=${encodeURIComponent(JSON.stringify({ userId: current.objectId }))}&order=-createdAt`)
-    return { data: formatResult(res) }
+    if (!current.objectId) return Promise.resolve([])
+    return request.get('/classes/Products', {
+      params: {
+        where: JSON.stringify({ userId: current.objectId }),
+        order: '-createdAt'
+      }
+    }).then(res => res.results || [])
   }
 }
 
-// 订单API (简化版)
+// 订单API
 export const orderApi = {
-  create: async (data) => {
+  create: (data) => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    const res = await request('/classes/Orders', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...data,
-        userId: current?.objectId || ''
-      })
+    return request.post('/classes/Orders', {
+      ...data,
+      userId: current?.objectId || ''
     })
-    return { data: res }
   },
 
-  getMyList: async () => {
+  getMyList: () => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    if (!current.objectId) return { data: [] }
-    const res = await request(`/classes/Orders?where=${encodeURIComponent(JSON.stringify({ userId: current.objectId }))}&order=-createdAt`)
-    return { data: formatResult(res) }
+    if (!current.objectId) return Promise.resolve([])
+    return request.get('/classes/Orders', {
+      params: {
+        where: JSON.stringify({ userId: current.objectId }),
+        order: '-createdAt'
+      }
+    }).then(res => res.results || [])
   },
 
-  updateStatus: async (id, status) => {
-    const res = await request(`/classes/Orders/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ status })
-    })
-    return { data: res }
-  }
+  updateStatus: (id, status) => request.put(`/classes/Orders/${id}`, { status })
 }
 
 // 消息API
 export const messageApi = {
-  getConversations: async () => {
+  getConversations: () => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    if (!current.objectId) return { data: [] }
-    const res = await request(`/classes/Messages?where=${encodeURIComponent(JSON.stringify({ toUserId: current.objectId }))}&order=-createdAt`)
-    return { data: formatResult(res) }
+    if (!current.objectId) return Promise.resolve([])
+    return request.get('/classes/Messages', {
+      params: {
+        where: JSON.stringify({ toUserId: current.objectId }),
+        order: '-createdAt'
+      }
+    }).then(res => res.results || [])
   },
 
-  getConversation: async (userId) => {
+  getConversation: (userId) => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    if (!current.objectId) return { data: [] }
+    if (!current.objectId) return Promise.resolve([])
     const where = {
       '$or': [
         { fromUserId: current.objectId, toUserId: userId },
         { fromUserId: userId, toUserId: current.objectId }
       ]
     }
-    const res = await request(`/classes/Messages?where=${encodeURIComponent(JSON.stringify(where))}&order=createdAt`)
-    return { data: formatResult(res) }
+    return request.get('/classes/Messages', {
+      params: {
+        where: JSON.stringify(where),
+        order: 'createdAt'
+      }
+    }).then(res => res.results || [])
   },
 
-  send: async (data) => {
+  send: (data) => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    const res = await request('/classes/Messages', {
-      method: 'POST',
-      body: JSON.stringify({
-        fromUserId: current?.objectId || '',
-        fromUserName: current?.nickname || current?.username || '',
-        toUserId: data.toUserId,
-        content: data.content
-      })
+    return request.post('/classes/Messages', {
+      fromUserId: current?.objectId || '',
+      fromUserName: current?.nickname || current?.username || '',
+      toUserId: data.toUserId,
+      content: data.content
     })
-    return { data: res }
   }
 }
 
 // 评价API
 export const reviewApi = {
-  create: async (data) => {
+  create: (data) => {
     const current = JSON.parse(localStorage.getItem('user') || '{}')
-    const res = await request('/classes/Reviews', {
-      method: 'POST',
-      body: JSON.stringify({
-        ...data,
-        userId: current?.objectId || '',
-        userName: current?.nickname || current?.username || ''
-      })
+    return request.post('/classes/Reviews', {
+      ...data,
+      userId: current?.objectId || '',
+      userName: current?.nickname || current?.username || ''
     })
-    return { data: res }
   },
 
-  getUserReviews: async (userId) => {
-    const res = await request(`/classes/Reviews?where=${encodeURIComponent(JSON.stringify({ userId }))}&order=-createdAt`)
-    return { data: formatResult(res) }
+  getUserReviews: (userId) => {
+    return request.get('/classes/Reviews', {
+      params: {
+        where: JSON.stringify({ userId }),
+        order: '-createdAt'
+      }
+    }).then(res => res.results || [])
   }
 }
 
-export default null
+export default request

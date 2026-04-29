@@ -1,26 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const db = require('../database/db');
+const { authenticateToken } = require('../middleware/auth');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
-const authenticate = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '未登录' });
-  try {
-    req.user = jwt.verify(token, JWT_SECRET);
-    next();
-  } catch (e) {
-    res.status(401).json({ error: 'token无效' });
-  }
-};
-
-router.get('/', async (req, res) => {
+router.get('/', (req, res) => {
   const { section, page = 1, limit = 20 } = req.query;
   const start = (page - 1) * limit;
 
-  let posts = [...db.data.posts];
+  let posts = db.get('posts').value();
+  if (!posts) posts = [];
+
   if (section && section !== '首页') {
     posts = posts.filter(p => p.section === section);
   }
@@ -29,8 +18,10 @@ router.get('/', async (req, res) => {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(start, start + parseInt(limit));
 
+  const users = db.get('users').value() || [];
+
   const postsWithUsers = posts.map(post => {
-    const author = db.data.users.find(u => u.id === post.user_id);
+    const author = users.find(u => u.id === post.user_id);
     return {
       ...post,
       author: author ? {
@@ -45,24 +36,24 @@ router.get('/', async (req, res) => {
   res.json(postsWithUsers);
 });
 
-router.get('/:id', async (req, res) => {
-  const post = db.data.posts.find(p => p.id === parseInt(req.params.id));
+router.get('/:id', (req, res) => {
+  const post = db.get('posts').find({ id: parseInt(req.params.id) }).value();
   if (!post) return res.status(404).json({ error: '帖子不存在' });
 
-  const author = db.data.users.find(u => u.id === post.user_id);
+  const users = db.get('users').value() || [];
+  const author = users.find(u => u.id === post.user_id);
+  const replies = db.get('postReplies').filter({ post_id: post.id }).value() || [];
 
-  const replies = db.data.postReplies
-    .filter(r => r.post_id === post.id)
-    .map(reply => {
-      const replyAuthor = db.data.users.find(u => u.id === reply.user_id);
-      return {
-        ...reply,
-        author: replyAuthor ? {
-          id: replyAuthor.id,
-          nickname: replyAuthor.nickname
-        } : null
-      };
-    });
+  const repliesWithUsers = replies.map(reply => {
+    const replyAuthor = users.find(u => u.id === reply.user_id);
+    return {
+      ...reply,
+      author: replyAuthor ? {
+        id: replyAuthor.id,
+        nickname: replyAuthor.nickname
+      } : null
+    };
+  });
 
   res.json({
     post: {
@@ -74,19 +65,20 @@ router.get('/:id', async (req, res) => {
         credit_score: author.credit_score
       } : null
     },
-    replies
+    replies: repliesWithUsers
   });
 });
 
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticateToken, (req, res) => {
   const { title, content, section, images = '', location = '' } = req.body;
 
   if (!title || !content) {
     return res.status(400).json({ error: '标题和内容不能为空' });
   }
 
-  const id = db.data.posts.length > 0
-    ? Math.max(...db.data.posts.map(p => p.id)) + 1
+  const posts = db.get('posts').value() || [];
+  const id = posts.length > 0
+    ? Math.max(...posts.map(p => p.id)) + 1
     : 1;
 
   const post = {
@@ -103,10 +95,10 @@ router.post('/', authenticate, async (req, res) => {
     created_at: new Date().toISOString()
   };
 
-  db.data.posts.push(post);
-  await db.write();
+  db.get('posts').push(post).write();
 
-  const author = db.data.users.find(u => u.id === req.user.id);
+  const users = db.get('users').value() || [];
+  const author = users.find(u => u.id === req.user.id);
   res.json({
     ...post,
     author: author ? {
@@ -116,41 +108,45 @@ router.post('/', authenticate, async (req, res) => {
   });
 });
 
-router.post('/:id/like', authenticate, async (req, res) => {
-  const post = db.data.posts.find(p => p.id === parseInt(req.params.id));
+router.post('/:id/like', authenticateToken, (req, res) => {
+  const post = db.get('posts').find({ id: parseInt(req.params.id) }).value();
   if (!post) return res.status(404).json({ error: '帖子不存在' });
 
-  post.likes = (post.likes || 0) + 1;
-  await db.write();
+  const newLikes = (post.likes || 0) + 1;
+  db.get('posts').find({ id: parseInt(req.params.id) }).assign({ likes: newLikes }).write();
 
-  res.json({ success: true, likes: post.likes });
+  res.json({ success: true, likes: newLikes });
 });
 
-router.post('/:id/reply', authenticate, async (req, res) => {
-  const post = db.data.posts.find(p => p.id === parseInt(req.params.id));
+router.post('/:id/reply', authenticateToken, (req, res) => {
+  const postId = parseInt(req.params.id);
+  const post = db.get('posts').find({ id: postId }).value();
   if (!post) return res.status(404).json({ error: '帖子不存在' });
 
   const { content } = req.body;
   if (!content) return res.status(400).json({ error: '回复内容不能为空' });
 
-  const replyId = db.data.postReplies.length > 0
-    ? Math.max(...db.data.postReplies.map(r => r.id)) + 1
+  const replies = db.get('postReplies').value() || [];
+  const replyId = replies.length > 0
+    ? Math.max(...replies.map(r => r.id)) + 1
     : 1;
 
   const reply = {
     id: replyId,
-    post_id: post.id,
+    post_id: postId,
     user_id: req.user.id,
     content,
     likes: 0,
     created_at: new Date().toISOString()
   };
 
-  db.data.postReplies.push(reply);
-  post.replies_count = (post.replies_count || 0) + 1;
-  await db.write();
+  db.get('postReplies').push(reply).write();
 
-  const author = db.data.users.find(u => u.id === req.user.id);
+  const newRepliesCount = (post.replies_count || 0) + 1;
+  db.get('posts').find({ id: postId }).assign({ replies_count: newRepliesCount }).write();
+
+  const users = db.get('users').value() || [];
+  const author = users.find(u => u.id === req.user.id);
   res.json({
     ...reply,
     author: author ? {

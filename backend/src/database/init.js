@@ -1,7 +1,11 @@
 const db = require('./db');
+const bcrypt = require('bcryptjs');
 
-const initData = async () => {
-  if (db.data.posts.length === 0) {
+const initData = () => {
+  const posts = db.get('posts').value();
+  const users = db.get('users').value();
+
+  if (!posts || posts.length === 0) {
     const samplePosts = [
       {
         id: 1,
@@ -83,19 +87,56 @@ const initData = async () => {
       }
     ];
 
-    db.data.posts = samplePosts;
+    db.set('posts', samplePosts).write();
 
-    if (db.data.users.length === 0) {
-      db.data.users = [
-        { id: 1, phone: '138****8888', password: 'xxx', nickname: '老骑友王哥', credit_score: 100, created_at: new Date().toISOString() },
-        { id: 2, phone: '139****9999', password: 'xxx', nickname: '风一样的男子', credit_score: 98, created_at: new Date().toISOString() },
-        { id: 3, phone: '137****7777', password: 'xxx', nickname: '嘉善小阿弟', credit_score: 95, created_at: new Date().toISOString() },
-        { id: 4, phone: '136****6666', password: 'xxx', nickname: '南湖站长', credit_score: 100, created_at: new Date().toISOString() },
-        { id: 5, phone: '135****5555', password: 'xxx', nickname: '秀洲跑腿王', credit_score: 92, created_at: new Date().toISOString() },
-      ];
+    if (!users || users.length === 0) {
+      // 所有示例用户密码都是 123456，已加密
+      const hashedPassword = bcrypt.hashSync('123456', 8);
+
+      db.set('users', [
+        {
+          id: 1,
+          phone: '138****8888',
+          password: hashedPassword,
+          nickname: '老骑友王哥',
+          credit_score: 100,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 2,
+          phone: '139****9999',
+          password: hashedPassword,
+          nickname: '风一样的男子',
+          credit_score: 98,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 3,
+          phone: '137****7777',
+          password: hashedPassword,
+          nickname: '嘉善小阿弟',
+          credit_score: 95,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 4,
+          phone: '136****6666',
+          password: hashedPassword,
+          nickname: '南湖站长',
+          credit_score: 100,
+          created_at: new Date().toISOString()
+        },
+        {
+          id: 5,
+          phone: '135****5555',
+          password: hashedPassword,
+          nickname: '秀洲跑腿王',
+          credit_score: 92,
+          created_at: new Date().toISOString()
+        },
+      ]).write();
     }
 
-    await db.write();
     console.log('✅ 示例数据初始化完成！');
   } else {
     console.log('ℹ️  数据库已有数据，跳过初始化');

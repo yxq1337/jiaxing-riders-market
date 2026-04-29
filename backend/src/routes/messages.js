@@ -1,19 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const db = require('../database/db');
+const { authenticateToken } = require('../middleware/auth');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-
-router.get('/conversations', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '未登录' });
-
+router.get('/conversations', authenticateToken, (req, res) => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const userId = decoded.id;
+    const userId = req.user.id;
+    const messages = db.get('messages').value() || [];
+    const users = db.get('users').value() || [];
+    const products = db.get('products').value() || [];
 
-    const userMessages = db.data.messages.filter(
+    const userMessages = messages.filter(
       m => m.from_user_id === userId || m.to_user_id === userId
     );
 
@@ -21,8 +18,8 @@ router.get('/conversations', (req, res) => {
     userMessages.forEach(m => {
       const otherUserId = m.from_user_id === userId ? m.to_user_id : m.from_user_id;
       if (!conversations[otherUserId] || new Date(m.created_at) > new Date(conversations[otherUserId].last_message_time)) {
-        const otherUser = db.data.users.find(u => u.id === otherUserId);
-        const product = m.product_id ? db.data.products.find(p => p.id === m.product_id) : null;
+        const otherUser = users.find(u => u.id === otherUserId);
+        const product = m.product_id ? products.find(p => p.id === m.product_id) : null;
         conversations[otherUserId] = {
           other_user_id: otherUserId,
           other_user_name: otherUser?.nickname || '未知用户',
@@ -37,34 +34,32 @@ router.get('/conversations', (req, res) => {
       .sort((a, b) => new Date(b.last_message_time) - new Date(a.last_message_time));
     res.json(result);
   } catch (e) {
-    res.status(401).json({ error: 'token无效' });
+    console.error(e);
+    res.status(500).json({ error: '服务器错误' });
   }
 });
 
-router.get('/conversation/:userId', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '未登录' });
-
+router.get('/conversation/:userId', authenticateToken, (req, res) => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
     const { userId: otherUserId } = req.params;
-    const userId = decoded.id;
+    const userId = req.user.id;
+    const messages = db.get('messages').value() || [];
+    const users = db.get('users').value() || [];
 
-    db.data.messages.forEach(m => {
+    messages.forEach(m => {
       if (m.from_user_id === Number(otherUserId) && m.to_user_id === userId) {
-        m.is_read = 1;
+        db.get('messages').find({ id: m.id }).assign({ is_read: 1 }).write();
       }
     });
-    db.write();
 
-    const messages = db.data.messages
+    const conversation = messages
       .filter(m =>
         (m.from_user_id === userId && m.to_user_id === Number(otherUserId)) ||
         (m.from_user_id === Number(otherUserId) && m.to_user_id === userId)
       )
       .map(m => {
-        const fromUser = db.data.users.find(u => u.id === m.from_user_id);
-        const toUser = db.data.users.find(u => u.id === m.to_user_id);
+        const fromUser = users.find(u => u.id === m.from_user_id);
+        const toUser = users.find(u => u.id === m.to_user_id);
         return {
           ...m,
           from_user_name: fromUser?.nickname || '',
@@ -73,36 +68,34 @@ router.get('/conversation/:userId', (req, res) => {
       })
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
 
-    res.json(messages);
+    res.json(conversation);
   } catch (e) {
-    res.status(401).json({ error: 'token无效' });
+    console.error(e);
+    res.status(500).json({ error: '服务器错误' });
   }
 });
 
-router.post('/', (req, res) => {
-  const token = req.headers.authorization?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: '未登录' });
-
+router.post('/', authenticateToken, (req, res) => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
     const { toUserId, productId, content } = req.body;
+    const messages = db.get('messages').value() || [];
 
-    const id = db.data.messages.length + 1;
+    const id = messages.length > 0 ? Math.max(...messages.map(m => m.id)) + 1 : 1;
     const message = {
       id,
-      from_user_id: decoded.id,
+      from_user_id: req.user.id,
       to_user_id: Number(toUserId),
       product_id: productId ? Number(productId) : null,
       content,
       is_read: 0,
       created_at: new Date().toISOString()
     };
-    db.data.messages.push(message);
-    db.write();
+    db.get('messages').push(message).write();
 
     res.json({ id, message: '消息发送成功' });
   } catch (e) {
-    res.status(401).json({ error: 'token无效' });
+    console.error(e);
+    res.status(500).json({ error: '服务器错误' });
   }
 });
 

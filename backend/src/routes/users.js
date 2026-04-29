@@ -10,12 +10,13 @@ router.post('/register', (req, res) => {
   const { phone, password, nickname } = req.body;
   const hashedPassword = bcrypt.hashSync(password, 8);
 
-  const exists = db.data.users.find(u => u.phone === phone);
+  const users = db.get('users').value() || [];
+  const exists = users.find(u => u.phone === phone);
   if (exists) {
     return res.status(400).json({ error: '手机号已注册' });
   }
 
-  const id = db.data.users.length + 1;
+  const id = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
   const user = {
     id,
     phone,
@@ -26,8 +27,8 @@ router.post('/register', (req, res) => {
     is_rider: 0,
     created_at: new Date().toISOString()
   };
-  db.data.users.push(user);
-  db.write();
+
+  db.get('users').push(user).write();
 
   const token = jwt.sign({ id }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user: { id, phone, nickname: user.nickname } });
@@ -36,7 +37,8 @@ router.post('/register', (req, res) => {
 router.post('/login', (req, res) => {
   const { phone, password } = req.body;
 
-  const user = db.data.users.find(u => u.phone === phone);
+  const users = db.get('users').value() || [];
+  const user = users.find(u => u.phone === phone);
   if (!user) {
     return res.status(401).json({ error: '手机号或密码错误' });
   }
@@ -55,7 +57,8 @@ router.get('/profile', (req, res) => {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.data.users.find(u => u.id === decoded.id);
+    const users = db.get('users').value() || [];
+    const user = users.find(u => u.id === decoded.id);
     if (!user) return res.status(404).json({ error: '用户不存在' });
     const { password, ...userWithoutPassword } = user;
     res.json(userWithoutPassword);

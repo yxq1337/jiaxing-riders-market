@@ -10,7 +10,8 @@ router.get('/', (req, res) => {
   const { category, minPrice, maxPrice, condition: cond, search, page = 1, limit = 20 } = req.query;
   const offset = (page - 1) * limit;
 
-  let products = db.data.products.filter(p => p.status === 'active');
+  let products = db.get('products').value() || [];
+  products = products.filter(p => p.status === 'active');
 
   if (category) {
     products = products.filter(p => p.category === category);
@@ -35,8 +36,9 @@ router.get('/', (req, res) => {
   products = products.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
   products = products.slice(Number(offset), Number(offset) + Number(limit));
 
+  const users = db.get('users').value() || [];
   products = products.map(p => {
-    const seller = db.data.users.find(u => u.id === p.user_id);
+    const seller = users.find(u => u.id === p.user_id);
     return { ...p, seller_name: seller?.nickname || '未知用户' };
   });
 
@@ -46,29 +48,30 @@ router.get('/', (req, res) => {
 router.get('/:id', (req, res) => {
   const { id } = req.params;
 
-  const product = db.data.products.find(p => p.id === Number(id));
+  const product = db.get('products').find({ id: Number(id) }).value();
   if (!product) return res.status(404).json({ error: '商品不存在' });
 
-  product.view_count = (product.view_count || 0) + 1;
-  db.write();
+  const newViewCount = (product.view_count || 0) + 1;
+  db.get('products').find({ id: Number(id) }).assign({ view_count: newViewCount }).write();
 
-  const seller = db.data.users.find(u => u.id === product.user_id);
+  const users = db.get('users').value() || [];
+  const seller = users.find(u => u.id === product.user_id);
   res.json({ ...product, seller_name: seller?.nickname || '未知用户', seller_credit: seller?.credit_score || 0 });
 });
 
 router.post('/', authenticateToken, (req, res) => {
   try {
-    const decoded = req.user;
     const { title, description, price, category, condition, images, location } = req.body;
 
     if (!title || !price || !category || !condition) {
       return res.status(400).json({ error: '缺少必要信息' });
     }
 
-    const id = db.data.products.length + 1;
+    const products = db.get('products').value() || [];
+    const id = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
     const product = {
       id,
-      user_id: decoded.id,
+      user_id: req.user.id,
       title,
       description: description || '',
       price: Number(price),
@@ -80,9 +83,8 @@ router.post('/', authenticateToken, (req, res) => {
       location: location || '',
       created_at: new Date().toISOString()
     };
-    db.data.products.push(product);
-    db.write();
 
+    db.get('products').push(product).write();
     res.json({ id, message: '发布成功' });
   } catch (e) {
     console.error(e);
@@ -92,11 +94,11 @@ router.post('/', authenticateToken, (req, res) => {
 
 router.get('/my/list', authenticateToken, (req, res) => {
   try {
-    const decoded = req.user;
-    const products = db.data.products
-      .filter(p => p.user_id === decoded.id)
+    const products = db.get('products').value() || [];
+    const myProducts = products
+      .filter(p => p.user_id === req.user.id)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    res.json(products);
+    res.json(myProducts);
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: '加载失败' });

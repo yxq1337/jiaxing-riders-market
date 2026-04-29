@@ -1,5 +1,5 @@
-const { Low } = require('lowdb');
-const { JSONFile } = require('lowdb/node');
+const low = require('lowdb');
+const FileSync = require('lowdb/adapters/FileSync');
 const path = require('path');
 const fs = require('fs');
 
@@ -9,8 +9,10 @@ if (!fs.existsSync(dbDir)) {
 }
 
 const dbPath = path.join(dbDir, 'db.json');
-const adapter = new JSONFile(dbPath);
-const db = new Low(adapter, {
+const adapter = new FileSync(dbPath);
+const db = low(adapter);
+
+db.defaults({
   users: [],
   products: [],
   orders: [],
@@ -19,8 +21,6 @@ const db = new Low(adapter, {
   favorites: [],
   posts: [],
   postReplies: []
-});
-
-db.read();
+}).write();
 
 module.exports = db;
