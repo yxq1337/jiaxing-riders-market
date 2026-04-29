@@ -2,8 +2,8 @@ import Bmob from 'hydrogen-js-sdk'
 
 // 初始化 Bmob
 Bmob.initialize(
-  'f33a06a03b05f0795367d32767f21c63',  // Application ID
-  'a99fccb85bfaf3aa'                    // Secret Key
+  'f33a06a03b05f0795367d32767f21c63',    // Application ID
+  '2cde7e643b3642de98a4e41f3a514842'     // Secret Key
 )
 
 // 工具函数：统一 Bmob 查询结果格式
