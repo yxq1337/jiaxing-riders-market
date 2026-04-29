@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const request = axios.create({
-  baseURL: '/api-bmob',
+  baseURL: 'https://api2.bmob.cn/1',
   timeout: 15000,
   headers: {
     'X-Bmob-Application-Id': 'f33a06a03b05f0795367d32767f21c63',
