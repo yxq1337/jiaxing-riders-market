@@ -1,6 +1,6 @@
 const APP_ID = 'f33a06a03b05f0795367d32767f21c63'
 const REST_KEY = 'e309b64d6176f40dea125aa38bf8a2e4'
-const BASE_URL = 'https://api.bmob.cn/1'
+const BASE_URL = 'https://api2.bmob.cn/1'
 
 const request = async (url, options = {}) => {
   const headers = {
@@ -15,16 +15,23 @@ const request = async (url, options = {}) => {
     headers['X-Bmob-Session-Token'] = token
   }
 
-  const res = await fetch(BASE_URL + url, {
-    ...options,
-    headers
-  })
-
-  const data = await res.json()
-  if (!res.ok) {
-    throw new Error(data.error || data.msg || '请求失败')
+  try {
+    console.log('请求:', BASE_URL + url)
+    const res = await fetch(BASE_URL + url, {
+      mode: 'cors',
+      ...options,
+      headers
+    })
+    const data = await res.json()
+    console.log('响应:', data)
+    if (!res.ok) {
+      throw new Error(data.error || data.msg || '请求失败')
+    }
+    return data
+  } catch (e) {
+    console.error('请求错误:', e)
+    throw e
   }
-  return data
 }
 
 const formatResult = (res) => {
