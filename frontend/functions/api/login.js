@@ -5,7 +5,7 @@ export async function onRequest(context) {
   const { request } = context;
   const url = new URL(request.url);
 
-  const targetUrl = `https://api.bmob.com/1/login${url.search}`;
+  const targetUrl = `https://api.bmobcloud.com/1/login${url.search}`;
 
   const headers = new Headers(request.headers);
   headers.set('X-Bmob-Application-Id', BMOB_APP_ID);
