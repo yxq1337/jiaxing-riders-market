@@ -7,8 +7,13 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true
+        target: 'https://api2.bmob.cn/1',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        headers: {
+          'X-Bmob-Application-Id': 'f33a06a03b05f0795367d32767f21c63',
+          'X-Bmob-REST-API-Key': 'e309b64d6176f40dea125aa38bf8a2e4'
+        }
       }
     }
   }
