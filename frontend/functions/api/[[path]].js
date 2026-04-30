@@ -4,7 +4,11 @@ const BMOB_REST_KEY = 'e309b64d6176f40dea125aa38bf8a2e4';
 export async function onRequest(context) {
   const { request, params } = context;
   const url = new URL(request.url);
-  const path = params.path ? params.path.join('/') : '';
+
+  // 提取 /api/ 后面的路径
+  const fullPath = url.pathname;
+  const apiMatch = fullPath.match(/^\/api\/(.*)$/);
+  const path = apiMatch ? apiMatch[1] : (params.path ? params.path.join('/') : '');
 
   // 登录和用户路径直接到 Bmob 根，其他到 /classes
   let targetUrl;
@@ -24,10 +28,13 @@ export async function onRequest(context) {
     headers.set('X-Bmob-Session-Token', sessionToken);
   }
 
+  // 移除 Host 头，避免被目标服务器拒绝
+  headers.delete('Host');
+
   const proxyRequest = new Request(targetUrl, {
     method: request.method,
     headers,
-    body: request.body
+    body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : null
   });
 
   return fetch(proxyRequest);
