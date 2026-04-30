@@ -87,15 +87,25 @@ const onSubmit = async () => {
   }
 
   try {
-    const api = isLogin.value ? userApi.login : userApi.register
-    const result = await api({
-      phone: form.phone,
-      password: form.password,
-      nickname: form.nickname
-    })
-
-    localStorage.setItem('token', result.token)
-    localStorage.setItem('user', JSON.stringify(result.user || result))
+    if (isLogin.value) {
+      // 登录：Bmob 会返回 sessionToken
+      await userApi.login({
+        phone: form.phone,
+        password: form.password
+      })
+    } else {
+      // 注册
+      await userApi.register({
+        phone: form.phone,
+        password: form.password,
+        nickname: form.nickname
+      })
+      // 注册成功后自动登录
+      await userApi.login({
+        phone: form.phone,
+        password: form.password
+      })
+    }
 
     showToast(isLogin.value ? '登录成功 🎉' : '注册成功 🎉')
 
