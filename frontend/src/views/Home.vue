@@ -25,14 +25,15 @@
 
     <!-- 滚动通知条 -->
     <div class="notice-bar">
-      <div class="notice-item">
-        <span class="notice-icon">🔔</span>
-        <span class="notice-label">嘉兴实时排雷:</span>
-        <marquee class="notice-text">
-          <span v-for="(notice, i) in notices" :key="i" class="notice-dot">
-            🔴 {{ notice }}
-          </span>
-        </marquee>
+      <div class="notice-scroll">
+        <div class="notice-item">
+          <span class="notice-icon">🔔</span>
+          <span class="notice-label">嘉兴实时排雷:</span>
+        </div>
+        <div class="notice-card" v-for="(notice, i) in notices" :key="i">
+          <span class="notice-card-icon">{{ notice.icon }}</span>
+          <span class="notice-card-text">{{ notice.text }}</span>
+        </div>
       </div>
     </div>
 
@@ -42,7 +43,7 @@
         <div class="hero-badge">专为外卖与同城骑士打造</div>
         <h1 class="hero-title">
           风里雨里，<br />
-          <span class="highlight">在这懂你。</span>
+          <span class="highlight">在这懂你<span class="dot">。</span></span>
         </h1>
         <p class="hero-desc">
           不再担心找不到厕所，不再为小电驴突然没电发愁。<br />
@@ -98,9 +99,10 @@ const activeNav = ref(0)
 const navItems = ['首页', '驿站推荐', '必备工具', '优岗招募', '互助大厅']
 
 const notices = [
-  '秀洲区王江泾社区新开骑手驿站，提供免费热水姜汤',
-  '广益路修路封路，送科技城请绕公交车道旁小路',
-  '姚荡家换电站补充了20组满电电池，快去换'
+  { icon: '🛑', text: '广场十字路口交警查没戴头盔 (10分钟前)' },
+  { icon: '🟤', text: '秀洲区王江泾社区新开骑手驿站，提供免费热水姜汤' },
+  { icon: '⚠️', text: '广益路修路封路，送科技城请绕公交车道旁小路' },
+  { icon: '🔋', text: '姚荡家换电站补充了20组满电电池，快去换' }
 ]
 
 const intelList = [
@@ -219,36 +221,58 @@ const intelList = [
 /* 通知条 */
 .notice-bar {
   background: #fff;
-  padding: 10px 32px;
+  padding: 12px 32px;
   border-bottom: 1px solid #eee;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.notice-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.notice-scroll {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
 .notice-item {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .notice-icon {
-  font-size: 18px;
+  font-size: 20px;
 }
 
 .notice-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: #e74c3c;
   white-space: nowrap;
 }
 
-.notice-text {
-  flex: 1;
-  font-size: 13px;
-  color: #666;
-  font-weight: 500;
+.notice-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f8f8f8;
+  border-radius: 20px;
+  flex-shrink: 0;
 }
 
-.notice-dot {
-  margin-right: 40px;
+.notice-card-icon {
+  font-size: 14px;
+}
+
+.notice-card-text {
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
 }
 
 /* Hero 区域 */
@@ -257,7 +281,7 @@ const intelList = [
   padding: 60px 80px;
   gap: 60px;
   min-height: 500px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #1a1a2e 100%);
+  background: linear-gradient(135deg, #1a1a1e 0%, #2a2a2e 50%, #1a1a1e 100%);
   position: relative;
   overflow: hidden;
 }
@@ -265,12 +289,12 @@ const intelList = [
 .hero::before {
   content: '';
   position: absolute;
-  right: -100px;
-  top: -50px;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, rgba(245, 200, 66, 0.1) 0%, transparent 70%);
-  border-radius: 50%;
+  right: 20%;
+  top: 0;
+  width: 40%;
+  height: 100%;
+  background: radial-gradient(ellipse at center, rgba(245, 200, 66, 0.15) 0%, transparent 70%);
+  pointer-events: none;
 }
 
 .hero-content {
@@ -291,7 +315,7 @@ const intelList = [
 }
 
 .hero-title {
-  font-size: 64px;
+  font-size: 72px;
   font-weight: 900;
   color: #fff;
   line-height: 1.1;
@@ -299,7 +323,17 @@ const intelList = [
 }
 
 .highlight {
-  color: #f5c842;
+  background: linear-gradient(135deg, #f5c842 0%, #f39c12 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.dot {
+  -webkit-text-fill-color: #e74c3c;
+  color: #e74c3c;
+  font-size: 80px;
+  line-height: 0.8;
 }
 
 .hero-desc {
