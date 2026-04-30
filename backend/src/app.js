@@ -30,6 +30,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: '嘉兴骑手集市API运行正常' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
