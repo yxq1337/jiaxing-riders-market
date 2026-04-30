@@ -364,6 +364,7 @@ const onSubmit = async () => {
 
     await productApi.create({
       ...form.value,
+      price: Number(form.value.price),
       images
     })
 

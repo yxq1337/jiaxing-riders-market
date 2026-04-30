@@ -104,7 +104,7 @@ const onSubmit = async () => {
     }, 500)
   } catch (e) {
     console.error('登录/注册错误:', e)
-    const msg = e?.error || e?.msg || e?.message || '操作失败，请重试'
+    const msg = e?.response?.data?.error || e?.error || e?.message || '操作失败，请重试'
     showToast(msg)
   }
 }

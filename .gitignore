@@ -33,3 +33,4 @@ npm-debug.log*
 # Database
 *.db
 *.sqlite
+backend/src/database/db.json

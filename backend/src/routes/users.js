@@ -8,7 +8,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 router.post('/register', (req, res) => {
   const { phone, password, nickname } = req.body;
-  const hashedPassword = bcrypt.hashSync(password, 8);
+
+  if (!phone || !password) {
+    return res.status(400).json({ error: '手机号和密码不能为空' });
+  }
 
   const users = db.get('users').value() || [];
   const exists = users.find(u => u.phone === phone);
@@ -16,6 +19,7 @@ router.post('/register', (req, res) => {
     return res.status(400).json({ error: '手机号已注册' });
   }
 
+  const hashedPassword = bcrypt.hashSync(password, 8);
   const id = users.length > 0 ? Math.max(...users.map(u => u.id)) + 1 : 1;
   const user = {
     id,
@@ -31,7 +35,15 @@ router.post('/register', (req, res) => {
   db.get('users').push(user).write();
 
   const token = jwt.sign({ id }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id, phone, nickname: user.nickname } });
+  res.json({
+    token,
+    user: {
+      id,
+      phone,
+      nickname: user.nickname,
+      credit_score: user.credit_score
+    }
+  });
 });
 
 router.post('/login', (req, res) => {
@@ -48,7 +60,15 @@ router.post('/login', (req, res) => {
   }
 
   const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '30d' });
-  res.json({ token, user: { id: user.id, phone: user.phone, nickname: user.nickname, credit_score: user.credit_score } });
+  res.json({
+    token,
+    user: {
+      id: user.id,
+      phone: user.phone,
+      nickname: user.nickname,
+      credit_score: user.credit_score
+    }
+  });
 });
 
 router.get('/profile', (req, res) => {
@@ -65,6 +85,19 @@ router.get('/profile', (req, res) => {
   } catch (e) {
     res.status(401).json({ error: 'token无效' });
   }
+});
+
+router.get('/:id', (req, res) => {
+  const { id } = req.params;
+  const users = db.get('users').value() || [];
+  const user = users.find(u => u.id === Number(id));
+
+  if (!user) {
+    return res.status(404).json({ error: '用户不存在' });
+  }
+
+  const { password, ...userWithoutPassword } = user;
+  res.json(userWithoutPassword);
 });
 
 module.exports = router;

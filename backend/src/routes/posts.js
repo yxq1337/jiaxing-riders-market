@@ -18,59 +18,23 @@ router.get('/', (req, res) => {
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(start, start + parseInt(limit));
 
-  const users = db.get('users').value() || [];
-
-  const postsWithUsers = posts.map(post => {
-    const author = users.find(u => u.id === post.user_id);
-    return {
-      ...post,
-      author: author ? {
-        id: author.id,
-        nickname: author.nickname,
-        phone: author.phone,
-        credit_score: author.credit_score
-      } : null
-    };
-  });
-
-  res.json(postsWithUsers);
+  res.json(posts);
 });
 
 router.get('/:id', (req, res) => {
   const post = db.get('posts').find({ id: parseInt(req.params.id) }).value();
   if (!post) return res.status(404).json({ error: '帖子不存在' });
 
-  const users = db.get('users').value() || [];
-  const author = users.find(u => u.id === post.user_id);
   const replies = db.get('postReplies').filter({ post_id: post.id }).value() || [];
 
-  const repliesWithUsers = replies.map(reply => {
-    const replyAuthor = users.find(u => u.id === reply.user_id);
-    return {
-      ...reply,
-      author: replyAuthor ? {
-        id: replyAuthor.id,
-        nickname: replyAuthor.nickname
-      } : null
-    };
-  });
-
   res.json({
-    post: {
-      ...post,
-      author: author ? {
-        id: author.id,
-        nickname: author.nickname,
-        phone: author.phone,
-        credit_score: author.credit_score
-      } : null
-    },
-    replies: repliesWithUsers
+    post,
+    replies: replies.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   });
 });
 
 router.post('/', authenticateToken, (req, res) => {
-  const { title, content, section, images = '', location = '' } = req.body;
+  const { title, content, section, images, location } = req.body;
 
   if (!title || !content) {
     return res.status(400).json({ error: '标题和内容不能为空' });
@@ -81,31 +45,25 @@ router.post('/', authenticateToken, (req, res) => {
     ? Math.max(...posts.map(p => p.id)) + 1
     : 1;
 
+  const users = db.get('users').value() || [];
+  const author = users.find(u => u.id === req.user.id);
+
   const post = {
     id,
     user_id: req.user.id,
     title,
     content,
     section: section || '闲聊灌水',
-    images,
-    location,
+    images: images || '',
+    location: location || '',
+    authorName: author?.nickname || author?.phone || '匿名',
     likes: 0,
     replies_count: 0,
-    stars: 0,
     created_at: new Date().toISOString()
   };
 
   db.get('posts').push(post).write();
-
-  const users = db.get('users').value() || [];
-  const author = users.find(u => u.id === req.user.id);
-  res.json({
-    ...post,
-    author: author ? {
-      id: author.id,
-      nickname: author.nickname
-    } : null
-  });
+  res.json({ id, message: '发布成功' });
 });
 
 router.post('/:id/like', authenticateToken, (req, res) => {
@@ -131,10 +89,14 @@ router.post('/:id/reply', authenticateToken, (req, res) => {
     ? Math.max(...replies.map(r => r.id)) + 1
     : 1;
 
+  const users = db.get('users').value() || [];
+  const author = users.find(u => u.id === req.user.id);
+
   const reply = {
     id: replyId,
     post_id: postId,
     user_id: req.user.id,
+    authorName: author?.nickname || author?.phone || '匿名',
     content,
     likes: 0,
     created_at: new Date().toISOString()
@@ -145,15 +107,7 @@ router.post('/:id/reply', authenticateToken, (req, res) => {
   const newRepliesCount = (post.replies_count || 0) + 1;
   db.get('posts').find({ id: postId }).assign({ replies_count: newRepliesCount }).write();
 
-  const users = db.get('users').value() || [];
-  const author = users.find(u => u.id === req.user.id);
-  res.json({
-    ...reply,
-    author: author ? {
-      id: author.id,
-      nickname: author.nickname
-    } : null
-  });
+  res.json({ message: '回复成功' });
 });
 
 module.exports = router;
