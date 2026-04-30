@@ -12,7 +12,7 @@ export async function onRequest(context) {
     objectId = '/' + pathMatch[1];
   }
 
-  const targetUrl = `https://api2.bmob.cn/1/users${objectId}${url.search}`;
+  const targetUrl = `https://api.bmobapp.com/1/users${objectId}${url.search}`;
 
   const headers = new Headers(request.headers);
   headers.set('X-Bmob-Application-Id', BMOB_APP_ID);

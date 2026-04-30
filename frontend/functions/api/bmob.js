@@ -10,7 +10,7 @@ export async function onRequest(context) {
   const apiMatch = fullPath.match(/^\/api\/(.*)$/);
   const path = apiMatch ? apiMatch[1] : '';
 
-  const targetUrl = `https://api2.bmob.cn/1/classes/${path}${url.search}`;
+  const targetUrl = `https://api.bmobapp.com/1/classes/${path}${url.search}`;
 
   const headers = new Headers(request.headers);
   headers.set('X-Bmob-Application-Id', BMOB_APP_ID);
