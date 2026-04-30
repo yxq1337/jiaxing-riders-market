@@ -1,10 +1,26 @@
 {
   "version": 1,
-  "description": "Handle API requests through Functions",
+  "description": "API routes to Bmob proxy",
   "routes": [
     {
-      "path": "/api/*",
-      "functions": "api/[[path]]"
+      "path": "/api/login",
+      "functions": "api/login"
+    },
+    {
+      "path": "/api/users",
+      "functions": "api/users"
+    },
+    {
+      "path": "/api/users/:objectId",
+      "functions": "api/users"
+    },
+    {
+      "path": "/api/:table",
+      "functions": "api/bmob"
+    },
+    {
+      "path": "/api/:table/:id",
+      "functions": "api/bmob"
     }
   ]
 }
